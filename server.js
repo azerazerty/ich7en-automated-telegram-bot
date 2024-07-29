@@ -12,6 +12,7 @@ const bot = new TelegramBot(Telegram_Token, { polling: true });
 
 app.use(express.json());
 app.use(cors());
+//azez
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
