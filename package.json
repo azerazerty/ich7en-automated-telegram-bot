@@ -2,13 +2,16 @@
   "name": "ich7en_bot",
   "version": "1.0.0",
   "description": "bot to topup free fire gems automatiquly from ich7en website",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "server": "nodemon index.js"
   },
   "author": "azerazertdz",
   "license": "ISC",
   "dependencies": {
+    "@vercel/node": "^3.2.7",
     "axios": "^1.7.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
