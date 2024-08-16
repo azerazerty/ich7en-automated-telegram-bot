@@ -47,7 +47,8 @@ To run this project, you will need to add the following environment variables to
 
 ## Screenshots
 
-- Start Chat : 
+- Start Chat :
+  
 ![App Screenshot](https://i.imgur.com/zjnF4hl.png)
 
 - Menu : 
