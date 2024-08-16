@@ -6,6 +6,7 @@ const TelegramBot = require("node-telegram-bot-api");
 const mongoose = require("mongoose");
 const User = require("./Models/userModel");
 const Order = require("./Models/orderModel");
+const cron = require("node-cron");
 
 const { v4: uuidv4, validate: validateUUID } = require("uuid");
 
@@ -602,6 +603,11 @@ bot.on("message", async (msg) => {
       handleKeyCommand(chatId);
     }
   }
+});
+
+///THIS IS ADDED TO PREVENT RENDER FROM SPINNING OFF
+cron.schedule("* * * * *", () => {
+  console.log("Wake up !");
 });
 
 app.listen(Port, () => {
