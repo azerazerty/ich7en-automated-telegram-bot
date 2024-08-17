@@ -20,6 +20,8 @@ const bot = new TelegramBot(Telegram_Token, { polling: true });
 
 let BOT_WAITING_FOR_RESPONSE = false;
 
+const USERS_STATE = {};
+
 // Connect to MongoDB
 mongoose
   .connect(MongoDB_URI, {
@@ -103,6 +105,9 @@ const commands = [
 
 // Handler functions
 function handleStartCommand(chatId) {
+  //Init User state
+  USERS_STATE[chatId] = {};
+
   // bot.sendMessage(chatId, "Welcome! Please provide your API key:");
   bot.sendMessage(chatId, "Welcome", {
     reply_markup: {
@@ -212,61 +217,51 @@ async function isAuthenticated(chatId) {
 }
 
 async function handleUpdateKey(chatId) {
-  // switch to wait for response
-  BOT_WAITING_FOR_RESPONSE = true;
+  // Set the user's state to wait for API key input
+  USERS_STATE[chatId] = { waitingForApiKey: true };
 
-  bot.once("message", async (msg) => {
-    if (BOT_WAITING_FOR_RESPONSE) {
+  const onMessage = async (msg) => {
+    // Ensure that we only handle the response for the intended user
+    if (msg.chat.id === chatId && USERS_STATE[chatId].waitingForApiKey) {
       const apiKey = msg.text;
 
       if (validateUUID(apiKey)) {
-        axios
-          .get(`${ICH7EN_API_BASE_URL}/profile`, {
+        try {
+          await axios.get(`${ICH7EN_API_BASE_URL}/profile`, {
             headers: {
               "api-token": `${apiKey}`,
             },
-          })
-          .then(async () => {
-            // bot.sendMessage(chatId, "API key updated successfully!");
-            // Save the valid API key here
-            try {
-              const user = await User.findOneAndUpdate(
-                { chatId },
-                { apiKey },
-                { upsert: true, new: true }
-              );
-              // bot.sendMessage(chatId, "API key set successfully!");
-              bot.sendMessage(chatId, "API key updated successfully!");
-
-              sendAvailableCommands(chatId);
-            } catch (err) {
-              console.error("Error saving API key:", err);
-              bot.sendMessage(
-                chatId,
-                "Failed to save API key. Please try again."
-              );
-              handleUpdateKey(chatId);
-            }
-          })
-          .catch((error) => {
-            console.log("CheckAPIError :", error.message);
-            bot.sendMessage(
-              chatId,
-              "Invalid API key. Please enter a valid API key."
-            );
-            handleUpdateKey(chatId);
-            return;
           });
+
+          await User.findOneAndUpdate(
+            { chatId },
+            { apiKey },
+            { upsert: true, new: true }
+          );
+
+          bot.sendMessage(chatId, "API key updated successfully!");
+          sendAvailableCommands(chatId);
+
+          // Clear the user's state and remove the listener after success
+          USERS_STATE[chatId] = {};
+          bot.removeListener("message", onMessage);
+        } catch (err) {
+          console.error("Error saving API key:", err.message);
+          bot.sendMessage(chatId, "Failed to save API key. Please try again.");
+          // No need to remove the listener, user will try again
+        }
       } else {
         bot.sendMessage(
           chatId,
-          "Invalid API key Format. Please enter a valid API key."
+          "Invalid API key format. Please enter a valid API key."
         );
-        // Prompt the user again for the API key
-        handleUpdateKey(chatId);
+        // No need to remove the listener, user will try again
       }
     }
-  });
+  };
+
+  // Register the listener for this specific user
+  bot.on("message", onMessage);
 }
 
 async function handleBalance(chatId) {
@@ -303,98 +298,98 @@ async function handleBalance(chatId) {
 }
 
 async function PlaceOrder(chatId, id, price, name) {
-  // switch to wait for response
-  BOT_WAITING_FOR_RESPONSE = true;
-  let playerId;
-  bot.sendMessage(chatId, "enter Player ID:");
+  // Set user state for waiting for player ID
+  USERS_STATE[chatId] = { waitingForPlayerId: true };
 
-  bot.once("message", async (msg) => {
-    if (BOT_WAITING_FOR_RESPONSE) {
-      playerId = msg.text;
-      bot.sendMessage(
-        chatId,
-        `Confirm by Typing *YES* \n_Note:If You Type anything else , your order will be Canceled._ `,
-        {
-          parse_mode: "Markdown",
-        }
-      );
-      bot.once("message", async (msg) => {
-        if (BOT_WAITING_FOR_RESPONSE && playerId) {
-          if (msg.text.toLowerCase() === "yes") {
-            try {
-              const user = await User.findOne({ chatId });
-              axios
-                .post(
-                  `${ICH7EN_API_BASE_URL}/order`,
-                  {
-                    playerId,
-                    itemId: id,
-                    quantity: 1,
-                    referenceId: uuidv4(),
-                  },
-                  {
-                    headers: {
-                      "api-token": `${user.apiKey}`,
-                    },
-                  }
-                )
-                .then(async (response) => {
-                  //save order in db
-                  await Order.create({
-                    userChatId: chatId,
-                    orderName: name,
-                    playerId,
-                    itemId: id,
-                    price,
-                    orderNumber: response.data.data.orderNumber,
-                    invoiceNumber: response.data.data.invoiceNumber,
-                  });
-                  const newBalance = await axios
-                    .get(`${ICH7EN_API_BASE_URL}/profile`, {
-                      headers: {
-                        "api-token": `${user.apiKey}`,
-                      },
-                    })
-                    .then((response) => {
-                      return response.data.data.balance;
-                    });
-                  bot.sendMessage(
-                    chatId,
-                    `Your Order Has been Created successfully! \n
-                    📦  _Order Number :_ \`${response.data.data.orderNumber}\` \n
-                    💰  _Your Current Balance:_ \`${newBalance}\`
-                    `,
-                    {
-                      parse_mode: "MARKDOWN",
-                    }
-                  );
-                  //excute order status function
+  bot.sendMessage(chatId, "Enter Player ID:");
 
-                  return;
-                })
-                .catch((error) => {
-                  console.log("GetProfile Error : ", error.message);
-                  bot.sendMessage(
-                    chatId,
-                    `Failed to TopUp: \n _${error.response.data.text}_`,
-                    {
-                      parse_mode: "MARKDOWN",
-                    }
-                  );
-                });
-            } catch (error) {
-              console.log("PlaceOrder Error : ", error.message);
-              bot.sendMessage(chatId, "Failed to TopUp.");
+  // Create a function to handle user messages
+  const handleMessage = async (msg) => {
+    if (msg.chat.id !== chatId || !USERS_STATE[chatId]?.waitingForPlayerId)
+      return;
+
+    const playerId = msg.text;
+    USERS_STATE[chatId] = { waitingForConfirmation: true };
+
+    const buttons = [
+      { text: "👍 Confirm", callback_data: "confirm_yes" },
+      { text: "👎 Cancel", callback_data: "confirm_no" },
+    ];
+
+    bot.sendMessage(chatId, "Proceed to Purchase?", {
+      reply_markup: { inline_keyboard: [buttons] },
+      parse_mode: "Markdown",
+    });
+
+    const handleCallbackQuery = async (query) => {
+      if (
+        query.message.chat.id !== chatId ||
+        !USERS_STATE[chatId]?.waitingForConfirmation
+      )
+        return;
+
+      if (query.data === "confirm_yes") {
+        try {
+          const user = await User.findOne({ chatId });
+          const response = await axios.post(
+            `${ICH7EN_API_BASE_URL}/order`,
+            {
+              playerId,
+              itemId: id,
+              quantity: 1,
+              referenceId: uuidv4(),
+            },
+            { headers: { "api-token": `${user.apiKey}` } }
+          );
+
+          await Order.create({
+            userChatId: chatId,
+            orderName: name,
+            playerId,
+            itemId: id,
+            price,
+            orderNumber: response.data.data.orderNumber,
+            invoiceNumber: response.data.data.invoiceNumber,
+          });
+
+          const newBalanceResponse = await axios.get(
+            `${ICH7EN_API_BASE_URL}/profile`,
+            {
+              headers: { "api-token": `${user.apiKey}` },
             }
-          } else {
-            bot.sendMessage(chatId, "Your Order Has Been Canceled.");
-          }
-          return;
+          );
+
+          const newBalance = newBalanceResponse.data.data.balance;
+
+          bot.sendMessage(
+            chatId,
+            `Your Order Has been Created successfully!\n\n📦 _Order Number:_ \`${response.data.data.orderNumber}\`\n💰 _Your Current Balance:_ \`${newBalance}\``,
+            { parse_mode: "MARKDOWN" }
+          );
+        } catch (error) {
+          console.error("PlaceOrder Error:", error.message);
+          bot.sendMessage(
+            chatId,
+            `Failed to TopUp.\n_${error.response.data.text}_`,
+            {
+              parse_mode: "MARKDOWN",
+            }
+          );
         }
-      });
-    }
-    return;
-  });
+      } else {
+        bot.sendMessage(chatId, "Your Order Has Been Canceled.");
+      }
+
+      // Clear user state after the operation is complete
+      USERS_STATE[chatId] = {};
+      bot.removeListener("callback_query", handleCallbackQuery); // Remove the listener
+    };
+
+    bot.on("callback_query", handleCallbackQuery);
+    bot.removeListener("message", handleMessage); // Remove the listener
+  };
+
+  bot.on("message", handleMessage);
 }
 
 async function handleRecentOrders(chatId) {
@@ -517,31 +512,35 @@ async function CheckOrder(chatId, orderNumber) {
 
 // Command handlers
 bot.onText(/\/start/, (msg) => {
-  BOT_WAITING_FOR_RESPONSE = false;
+  // BOT_WAITING_FOR_RESPONSE = false;
   handleStartCommand(msg.chat.id);
 });
 
 bot.onText(/\/offers/, (msg) => {
-  BOT_WAITING_FOR_RESPONSE = false;
+  // BOT_WAITING_FOR_RESPONSE = false;
   const chatId = msg.chat.id;
+  USERS_STATE[chatId] = {};
   handleOffersCommand(chatId);
 });
 
 bot.onText(/\/balance/, (msg) => {
-  BOT_WAITING_FOR_RESPONSE = false;
+  // BOT_WAITING_FOR_RESPONSE = false;
   const chatId = msg.chat.id;
+  USERS_STATE[chatId] = {};
   handleBalanceCommand(chatId);
 });
 
 bot.onText(/\/recent/, (msg) => {
-  BOT_WAITING_FOR_RESPONSE = false;
+  // BOT_WAITING_FOR_RESPONSE = false;
   const chatId = msg.chat.id;
+  USERS_STATE[chatId] = {};
   handleRecentCommand(chatId);
 });
 
 bot.onText(/\/help/, (msg) => {
-  BOT_WAITING_FOR_RESPONSE = false;
+  // BOT_WAITING_FOR_RESPONSE = false;
   const chatId = msg.chat.id;
+  USERS_STATE[chatId] = {};
   const helpMessage = commands
     .map((cmd) => `${cmd.command} - ${cmd.description}`)
     .join("\n");
@@ -549,8 +548,10 @@ bot.onText(/\/help/, (msg) => {
 });
 
 bot.onText(/\/key/, async (msg) => {
-  BOT_WAITING_FOR_RESPONSE = false;
+  // BOT_WAITING_FOR_RESPONSE = false;
   const chatId = msg.chat.id;
+  USERS_STATE[chatId] = {};
+
   handleKeyCommand(chatId);
 });
 
@@ -573,6 +574,8 @@ bot.on("callback_query", (query) => {
         CheckOrder(chatId, id);
       }
       break;
+    case "confirm":
+      break;
     default:
       bot.sendMessage(chatId, "Invalid selection.");
       break;
@@ -584,22 +587,26 @@ bot.on("message", async (msg) => {
 
   if (!msg.text.startsWith("/")) {
     if (msg.text.indexOf("💰 Balance") === 0) {
-      BOT_WAITING_FOR_RESPONSE = false;
+      // BOT_WAITING_FOR_RESPONSE = false;
+      USERS_STATE[chatId] = {};
       handleBalanceCommand(chatId);
     }
     if (msg.text.indexOf("📦 Recent Orders") === 0) {
-      BOT_WAITING_FOR_RESPONSE = false;
+      // BOT_WAITING_FOR_RESPONSE = false;
+      USERS_STATE[chatId] = {};
       handleRecentCommand(chatId);
     }
     if (msg.text.indexOf("🏷️ TopUp Free Fire Gems") === 0) {
-      BOT_WAITING_FOR_RESPONSE = false;
+      // BOT_WAITING_FOR_RESPONSE = false;
+      USERS_STATE[chatId] = {};
 
       handleOffersCommand(chatId);
       return;
     }
     ///
     if (msg.text.indexOf("🔑 Set/Change Api Key") === 0) {
-      BOT_WAITING_FOR_RESPONSE = false;
+      // BOT_WAITING_FOR_RESPONSE = false;
+      USERS_STATE[chatId] = {};
       handleKeyCommand(chatId);
     }
   }
@@ -626,9 +633,9 @@ function reloadWebsite() {
     });
 }
 
-cron.schedule("* * * * *", () => {
-  reloadWebsite();
-});
+// cron.schedule("* * * * *", () => {
+//   reloadWebsite();
+// });
 
 app.listen(Port, () => {
   console.log(`App listening on port ${Port}`);
