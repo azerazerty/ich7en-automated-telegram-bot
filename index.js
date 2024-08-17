@@ -633,9 +633,9 @@ function reloadWebsite() {
     });
 }
 
-// cron.schedule("* * * * *", () => {
-//   reloadWebsite();
-// });
+cron.schedule("* * * * *", () => {
+  reloadWebsite();
+});
 
 app.listen(Port, () => {
   console.log(`App listening on port ${Port}`);
