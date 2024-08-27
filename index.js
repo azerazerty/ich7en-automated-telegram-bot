@@ -449,7 +449,7 @@ async function CheckOrder(chatId, orderNumber) {
       .post(
         `${ICH7EN_API_BASE_URL}/status`,
         {
-          orderNumber: [orderNumber],
+          orderNumbers: [orderNumber],
         },
         {
           headers: {
