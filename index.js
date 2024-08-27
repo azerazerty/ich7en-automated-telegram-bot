@@ -162,6 +162,7 @@ async function handleOfferSelection(chatId, offerId) {
       }
     );
     // Here you can add logic to create the offer and send the status
+
     await PlaceOrder(
       chatId,
       selectedOffer.id,
@@ -305,7 +306,9 @@ async function handleBalance(chatId) {
 }
 
 async function PlaceOrder(chatId, id, price, name) {
+  console.log(id);
   USERS_STATE[chatId] = {};
+
   // Set user state for waiting for player ID
   USERS_STATE[chatId] = { waitingForPlayerId: true };
 
@@ -313,12 +316,15 @@ async function PlaceOrder(chatId, id, price, name) {
 
   // Create a function to handle user messages
   const handleMessage = async (msg) => {
+    console.log("handle called ", id);
     if (BUTTONS.includes(msg.text)) {
       bot.removeListener("message", handleMessage); // Remove the listener
+
       return;
     }
     if (msg.chat.id !== chatId || !USERS_STATE[chatId]?.waitingForPlayerId) {
       bot.removeListener("message", handleMessage); // Remove the listener
+
       return;
     }
     if (isNaN(parseInt(msg.text)) || parseInt(msg.text) < 1000) {
@@ -330,6 +336,7 @@ async function PlaceOrder(chatId, id, price, name) {
     const playerId = msg.text;
     USERS_STATE[chatId] = { waitingForConfirmation: true };
 
+    console.log(playerId);
     const buttons = [
       { text: "👍 Confirm", callback_data: "confirm_yes" },
       { text: "👎 Cancel", callback_data: "confirm_no" },
@@ -341,6 +348,7 @@ async function PlaceOrder(chatId, id, price, name) {
     });
 
     const handleCallbackQuery = async (query) => {
+      console.log("called query ", id);
       if (
         query.message.chat.id !== chatId ||
         !USERS_STATE[chatId]?.waitingForConfirmation
@@ -588,6 +596,7 @@ bot.on("callback_query", (query) => {
   switch (command) {
     case "offer":
       if (action === "select") {
+        if (Object.keys(USERS_STATE[chatId]).length > 0) return;
         handleOfferSelection(chatId, id);
       }
       break;
