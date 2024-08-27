@@ -22,6 +22,13 @@ let BOT_WAITING_FOR_RESPONSE = false;
 
 const USERS_STATE = {};
 
+const BUTTONS = [
+  "🔑 Set/Change Api Key",
+  "💰 Balance",
+  "📦 Recent Orders",
+  "🏷️ TopUp Free Fire Gems",
+];
+
 // Connect to MongoDB
 mongoose
   .connect(MongoDB_URI, {
@@ -298,6 +305,7 @@ async function handleBalance(chatId) {
 }
 
 async function PlaceOrder(chatId, id, price, name) {
+  USERS_STATE[chatId] = {};
   // Set user state for waiting for player ID
   USERS_STATE[chatId] = { waitingForPlayerId: true };
 
@@ -305,8 +313,19 @@ async function PlaceOrder(chatId, id, price, name) {
 
   // Create a function to handle user messages
   const handleMessage = async (msg) => {
-    if (msg.chat.id !== chatId || !USERS_STATE[chatId]?.waitingForPlayerId)
+    if (BUTTONS.includes(msg.text)) {
+      bot.removeListener("message", handleMessage); // Remove the listener
       return;
+    }
+    if (msg.chat.id !== chatId || !USERS_STATE[chatId]?.waitingForPlayerId) {
+      bot.removeListener("message", handleMessage); // Remove the listener
+      return;
+    }
+    if (isNaN(parseInt(msg.text)) || parseInt(msg.text) < 1000) {
+      bot.sendMessage(chatId, "Wrong ID Number. Please Type Valid ID ");
+
+      return;
+    }
 
     const playerId = msg.text;
     USERS_STATE[chatId] = { waitingForConfirmation: true };
@@ -325,8 +344,10 @@ async function PlaceOrder(chatId, id, price, name) {
       if (
         query.message.chat.id !== chatId ||
         !USERS_STATE[chatId]?.waitingForConfirmation
-      )
+      ) {
+        bot.removeListener("callback_query", handleCallbackQuery); // Remove the listener
         return;
+      }
 
       if (query.data === "confirm_yes") {
         try {
@@ -386,6 +407,7 @@ async function PlaceOrder(chatId, id, price, name) {
     };
 
     bot.on("callback_query", handleCallbackQuery);
+
     bot.removeListener("message", handleMessage); // Remove the listener
   };
 
