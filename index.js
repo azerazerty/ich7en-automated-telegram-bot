@@ -27,6 +27,7 @@ const BUTTONS = [
   "💰 Balance",
   "📦 Recent Orders",
   "🏷️ TopUp Free Fire Gems",
+  "🏷️ TopUp PUBG UC",
 ];
 
 // Connect to MongoDB
@@ -47,7 +48,7 @@ app.get("/", (req, res) => {
 });
 
 /// TESTING
-const offers = [
+const freefire_offers = [
   {
     id: 33,
     name: "💎 100 + 10  💎",
@@ -100,9 +101,52 @@ const offers = [
   // { id: 3, name: "Offer 3", description: "Description for offer 3" },
 ];
 
+const pubg_offers = [
+  {
+    id: 78,
+    name: "🪖 PUBG 60 UC  🪖",
+    description: "_Total Price To Pay:_  💵* 1.00 $*",
+    price: 1.0,
+  },
+  {
+    id: 79,
+    name: "🪖 PUBG 325 UC  🪖",
+    description: "_Total Price To Pay:_  💵* 5.00 $*",
+    price: 5.0,
+  },
+  {
+    id: 80,
+    name: "🪖 PUBG 660 UC  🪖",
+    description: "_Total Price To Pay:_  💵* 10.00 $*",
+    price: 10.0,
+  },
+  {
+    id: 81,
+    name: "🪖 PUBG 1800 UC  🪖",
+    description: "_Total Price To Pay:_  💵* 25.00 $*",
+    price: 25.0,
+  },
+  {
+    id: 82,
+    name: "🪖 PUBG 3850 UC  🪖",
+    description: "_Total Price To Pay:_  💵* 50.00 $*",
+    price: 50.0,
+  },
+  {
+    id: 83,
+    name: "🪖 PUBG 8100 UC  🪖",
+    description: "_Total Price To Pay:_  💵* 100.00 $*",
+    price: 100.0,
+  },
+];
+
 const commands = [
   { command: "/start", description: "Start the bot and set API key" },
-  { command: "/offers", description: "List available offers" },
+  {
+    command: "/freefire_offers",
+    description: "List available Free Fire offers",
+  },
+  { command: "/pubg_offers", description: "List available PUBG offers" },
   { command: "/balance", description: "List available offers" },
   { command: "/recent", description: "List recent orders" },
   // { command: "/check", description: "Check options" },
@@ -122,6 +166,7 @@ function handleStartCommand(chatId) {
         ["🔑 Set/Change Api Key"],
         ["💰 Balance", "📦 Recent Orders"],
         ["🏷️ TopUp Free Fire Gems"],
+        ["🏷️ TopUp PUBG UC"],
       ],
       resize_keyboard: true,
 
@@ -132,15 +177,33 @@ function handleStartCommand(chatId) {
   // userKeys[chatId] = null; // Initialize user key as null
 }
 
-async function handleOffersCommand(chatId) {
+async function handleFreeFireOffersCommand(chatId) {
   if (!(await isAuthenticated(chatId))) {
     bot.sendMessage(chatId, "Please provide your API key first.");
     return;
   }
-  const offerButtons = offers.map((offer) => [
+  const offerButtons = freefire_offers.map((offer) => [
     {
       text: offer.name,
-      callback_data: `offer_select_${offer.id}`,
+      callback_data: `offer_select_freefire_${offer.id}`,
+    },
+  ]);
+  const options = {
+    reply_markup: {
+      inline_keyboard: [...offerButtons],
+    },
+  };
+  bot.sendMessage(chatId, "Please select an offer:", options);
+}
+async function handlePubgOffersCommand(chatId) {
+  if (!(await isAuthenticated(chatId))) {
+    bot.sendMessage(chatId, "Please provide your API key first.");
+    return;
+  }
+  const offerButtons = pubg_offers.map((offer) => [
+    {
+      text: offer.name,
+      callback_data: `offer_select_pubg_${offer.id}`,
     },
   ]);
   const options = {
@@ -151,7 +214,20 @@ async function handleOffersCommand(chatId) {
   bot.sendMessage(chatId, "Please select an offer:", options);
 }
 
-async function handleOfferSelection(chatId, offerId) {
+async function handleOfferSelection(chatId, offerId, game) {
+  let offers;
+  switch (game) {
+    case "freefire":
+      offers = freefire_offers;
+      break;
+    case "pubg":
+      offers = pubg_offers;
+      break;
+    default:
+      offers = freefire_offers;
+
+      break;
+  }
   const selectedOffer = offers.find((offer) => offer.id == offerId);
   if (selectedOffer) {
     bot.sendMessage(
@@ -306,7 +382,6 @@ async function handleBalance(chatId) {
 }
 
 async function PlaceOrder(chatId, id, price, name) {
-  console.log(id);
   USERS_STATE[chatId] = {};
 
   // Set user state for waiting for player ID
@@ -316,7 +391,6 @@ async function PlaceOrder(chatId, id, price, name) {
 
   // Create a function to handle user messages
   const handleMessage = async (msg) => {
-    console.log("handle called ", id);
     if (BUTTONS.includes(msg.text)) {
       bot.removeListener("message", handleMessage); // Remove the listener
 
@@ -336,7 +410,6 @@ async function PlaceOrder(chatId, id, price, name) {
     const playerId = msg.text;
     USERS_STATE[chatId] = { waitingForConfirmation: true };
 
-    console.log(playerId);
     const buttons = [
       { text: "👍 Confirm", callback_data: "confirm_yes" },
       { text: "👎 Cancel", callback_data: "confirm_no" },
@@ -348,7 +421,6 @@ async function PlaceOrder(chatId, id, price, name) {
     });
 
     const handleCallbackQuery = async (query) => {
-      console.log("called query ", id);
       if (
         query.message.chat.id !== chatId ||
         !USERS_STATE[chatId]?.waitingForConfirmation
@@ -546,11 +618,17 @@ bot.onText(/\/start/, (msg) => {
   handleStartCommand(msg.chat.id);
 });
 
-bot.onText(/\/offers/, (msg) => {
+bot.onText(/\/freefire_offers/, (msg) => {
   // BOT_WAITING_FOR_RESPONSE = false;
   const chatId = msg.chat.id;
   USERS_STATE[chatId] = {};
-  handleOffersCommand(chatId);
+  handleFreeFireOffersCommand(chatId);
+});
+bot.onText(/\/pubg_offers/, (msg) => {
+  // BOT_WAITING_FOR_RESPONSE = false;
+  const chatId = msg.chat.id;
+  USERS_STATE[chatId] = {};
+  handlePubgOffersCommand(chatId);
 });
 
 bot.onText(/\/balance/, (msg) => {
@@ -591,13 +669,14 @@ bot.on("callback_query", (query) => {
   const data = query.data.split("_");
   const command = data[0];
   const action = data[1];
-  const id = data[2];
+  const game = data[2];
+  const id = data[3];
 
   switch (command) {
     case "offer":
       if (action === "select") {
         if (Object.keys(USERS_STATE[chatId]).length > 0) return;
-        handleOfferSelection(chatId, id);
+        handleOfferSelection(chatId, id, game);
       }
       break;
     case "order":
@@ -627,13 +706,22 @@ bot.on("message", async (msg) => {
       USERS_STATE[chatId] = {};
       handleRecentCommand(chatId);
     }
+    if (msg.text.indexOf("🏷️ TopUp PUBG UC") === 0) {
+      // BOT_WAITING_FOR_RESPONSE = false;
+      USERS_STATE[chatId] = {};
+
+      handlePubgOffersCommand(chatId);
+      return;
+    }
     if (msg.text.indexOf("🏷️ TopUp Free Fire Gems") === 0) {
       // BOT_WAITING_FOR_RESPONSE = false;
       USERS_STATE[chatId] = {};
 
-      handleOffersCommand(chatId);
+      handleFreeFireOffersCommand(chatId);
+
       return;
     }
+
     ///
     if (msg.text.indexOf("🔑 Set/Change Api Key") === 0) {
       // BOT_WAITING_FOR_RESPONSE = false;
