@@ -518,7 +518,7 @@ async function handleRecentOrders(chatId) {
                 )
                 .concat(" ")
                 .concat(` 🛒`),
-              callback_data: `order_select_${order.orderNumber}`,
+              callback_data: `order_select_all_${order.orderNumber}`,
             },
           ]);
           const options = {
